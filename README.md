@@ -78,3 +78,7 @@ apinews/
 ## Prueba en Postman
 https://newsapi.org/v2/everything?q=apple&language=es&sortBy=popularity&apiKey=
 ![Evidencia Postman](assets/evidencias/news.png)
+
+## Prueba en Emulador
+La aplicación fue probada en un **emulador web**.  
+![Evidencia Postman](assets/evidencias/evidencia.png)
