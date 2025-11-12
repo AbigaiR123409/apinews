@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'news_service.dart';
+import 'package:apinews/news_service.dart';
 
 class NewsScreen extends StatefulWidget {
   const NewsScreen({super.key});
@@ -9,152 +9,171 @@ class NewsScreen extends StatefulWidget {
 }
 
 class _NewsScreenState extends State<NewsScreen> {
-  final NewsService _service = NewsService();
-  late Future<List<Map<String, dynamic>>> _futureNews;
-  final TextEditingController _controller = TextEditingController();
+  final _service = NewsService();
+  final _queryController = TextEditingController();
+  final _cityController = TextEditingController();
+  List<Map<String, dynamic>> _articles = [];
+  bool _loading = false;
+  String? _error;
 
-  @override
-  void initState() {
-    super.initState();
-    _futureNews = _service.fetchNews();
-  }
+  Future<void> _loadNews() async {
+    final query = _queryController.text.trim();
+    final city = _cityController.text.trim();
 
-  void _searchNews() {
-    final query = _controller.text.trim();
+    if (query.isEmpty && city.isEmpty) {
+      setState(() => _error = 'Por favor ingresa un tema o ciudad para buscar.');
+      return;
+    }
+
     setState(() {
-      _futureNews = _service.fetchNews(query: query.isEmpty ? 'apple' : query);
+      _loading = true;
+      _error = null;
     });
+
+    try {
+      final searchTerm = [query, city].where((e) => e.isNotEmpty).join(' ');
+      final data = await _service.fetchNews(query: searchTerm);
+      setState(() => _articles = data);
+    } catch (e) {
+      setState(() => _error = 'Error: ${e.toString()}');
+    } finally {
+      setState(() => _loading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.purple.shade50,
       appBar: AppBar(
-        title: const Text('Últimas Noticias'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _searchNews,
-            tooltip: 'Recargar noticias',
-          ),
-        ],
+        title: const Text('📰 Últimas Noticias'),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+        elevation: 4,
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: TextField(
-              controller: _controller,
+      body: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          children: [
+            // 🔍 Campo de tema
+            TextField(
+              controller: _queryController,
               decoration: InputDecoration(
                 hintText: 'Buscar tema (ej. tecnología, fútbol, salud...)',
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.search),
-                  onPressed: _searchNews,
-                ),
+                prefixIcon: const Icon(Icons.search),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+                filled: true,
+                fillColor: Colors.white,
               ),
-              onSubmitted: (_) => _searchNews(),
             ),
-          ),
-          Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _futureNews,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                } else if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Error: ${snapshot.error}',
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  );
-                } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(
-                    child: Text('No hay noticias disponibles.'),
-                  );
-                }
+            const SizedBox(height: 10),
 
-                final newsList = snapshot.data!;
-                return ListView.builder(
-                  itemCount: newsList.length,
+            // 🏙️ Campo de ciudad
+            TextField(
+              controller: _cityController,
+              decoration: InputDecoration(
+                hintText: 'Buscar por ciudad (ej. México, Madrid, Tokio...)',
+                prefixIcon: const Icon(Icons.location_city),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: Colors.white,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // 🔘 Botón de búsqueda
+            ElevatedButton.icon(
+              onPressed: _loadNews,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Buscar Noticias'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                minimumSize: const Size.fromHeight(48),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // 🕑 Estados de carga o error
+            if (_loading)
+              const Expanded(
+                child: Center(
+                  child: CircularProgressIndicator(),
+                ),
+              )
+            else if (_error != null)
+              Expanded(
+                child: Center(
+                  child: Text(
+                    _error!,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            else if (_articles.isEmpty)
+              const Expanded(
+                child: Center(
+                  child: Text(
+                    'No hay noticias disponibles.',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              )
+            else
+              // 📰 Lista de noticias
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _articles.length,
                   itemBuilder: (context, i) {
-                    final n = newsList[i];
+                    final a = _articles[i];
                     return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      margin: const EdgeInsets.symmetric(vertical: 8),
                       elevation: 3,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: ListTile(
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: n['urlToImage'] != null
-                              ? Image.network(
-                                  n['urlToImage'],
-                                  width: 80,
-                                  height: 80,
+                        leading: a['urlToImage'] != null
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.network(
+                                  a['urlToImage'],
+                                  width: 60,
+                                  height: 60,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      width: 80,
-                                      height: 80,
-                                      color: Colors.grey.shade200,
-                                      child: const Icon(Icons.image_not_supported,
-                                          color: Colors.grey, size: 40),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  width: 80,
-                                  height: 80,
-                                  color: Colors.grey.shade200,
-                                  child: const Icon(Icons.newspaper,
-                                      color: Colors.grey, size: 40),
+                                  errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.image_not_supported),
                                 ),
-                        ),
+                              )
+                            : const Icon(Icons.image_not_supported, size: 40),
                         title: Text(
-                          n['title'] ?? '',
+                          a['title'] ?? '',
                           style: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16),
+                              fontWeight: FontWeight.bold, fontSize: 15),
                         ),
                         subtitle: Text(
-                          n['description'] ?? '',
-                          maxLines: 2,
+                          a['description'] ?? '',
+                          maxLines: 3,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        onTap: () => _showNewsDialog(context, n),
                       ),
                     );
                   },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showNewsDialog(BuildContext context, Map<String, dynamic> news) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(news['title'] ?? 'Noticia'),
-        content: Text(
-          news['url'] ?? 'Sin enlace disponible',
-          style: const TextStyle(fontSize: 13, color: Colors.blueAccent),
+                ),
+              ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cerrar'),
-          ),
-        ],
       ),
     );
   }
